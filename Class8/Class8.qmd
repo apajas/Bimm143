@@ -1,0 +1,279 @@
+---
+title: "Class08: Mini-project"
+author: "Alec (200143723)"
+format: pdf
+toc: true
+---
+
+## Background
+The goal of this mini-project is to explore a complete analysis using the machine learning techniques covered in class.
+
+Today we will analyze a biopsy data-set from fine needle aspiration (FNA) of breast mass
+
+## Data Import
+The data is available as a CSV file for download. We can read this with the `read.csv()` function:
+
+```{r, results = 'hide'}
+read.csv("WisconsinCancer.csv")
+```
+
+```{r}
+#save input data file into project directory
+fna.data <- "WisconsinCancer.csv"
+
+#complete code input and store as wisc.df
+wisc.df <- read.csv(fna.data, row.names=1)
+
+head(wisc.df, 4)
+```
+
+Save the expert "diagnosis" for use later when we have results from PCA etc. and remove this column from the data we actually use for our analysis `wisc.data`.
+
+```{r}
+
+diagnosis <- wisc.df$diagnosis
+#We can use -1 here to remove the first column
+wisc.data <- wisc.df[,-1]
+
+head(wisc.data, 3)
+```
+
+
+## Exploratory Analysis
+
+>**Q1.** How many observations are in this dataset?
+
+```{r}
+sum(wisc.data)
+```
+
+
+>**Q2.** How many of the observations have a malignant diagnosis?
+
+```{r}
+wisc.df$diagnosis == "M"
+```
+
+```{r}
+table(wisc.df$diagnosis)
+```
+
+
+>**Q3.** How many variables/features in the data are suffixed with _mean?
+
+```{r}
+colnames(wisc.data)
+```
+
+
+## Principal Component Analysis
+
+Before we do any analysis like PCA we most likely want to "scale our data so certain columns with large ranges of values do not dominate just because their units i.e we set `scale=TRUE`
+
+```{r}
+# Check column means and standard deviations
+colMeans(wisc.data)
+
+apply(wisc.data,2,sd)
+```
+
+```{r}
+# Perform PCA on wisc.data by completing the following code
+wisc.pr <- prcomp(wisc.data, scale=TRUE)
+# Look at summary of results
+summary(wisc.pr)
+
+```
+
+
+>**Q4.** From your results, what proportion of the original variance is captured by the first principal component (PC1)?
+
+```{r}
+variance <- summary(wisc.pr)$importance[2,]
+
+variance[1]
+```
+
+ 
+>**Q5.** How many principal components (PCs) are required to describe at least 70% of the original variance in the data?
+
+```{r}
+which(summary(wisc.pr)$importance[3,] >= 0.70)[1]
+```
+
+>**Q6.** How many principal components (PCs) are required to describe at least 90% of the original variance in the data?
+
+```{r}
+which(summary(wisc.pr)$importance[3,] >= 0.90)[1]
+```
+
+
+```{r}
+biplot(wisc.pr)
+```
+
+
+>**Q7.** What stands out to you about this plot? Is it easy or difficult to understand? Why?
+
+What stands out to me about this plot is how much plot points there is and thats what makes it hard to understand. There is too much information piled up on the plot to understand the information.
+
+```{r}
+library(ggplot2)
+
+ggplot(wisc.pr$x)+
+  aes(PC1,PC2, col=as.factor(diagnosis))+
+  geom_point()
+```
+
+>**Q8.** Generate a similar plot for principal components 1 and 3. What do you notice about these plots?
+
+The plots represent the diagnosis between PC1 and 3, but generally for B is more packed together while M is more open and spread.
+
+```{r}
+ggplot(wisc.pr$x)+
+  aes(PC1,PC3, col=as.factor(diagnosis))+
+  geom_point()
+```
+
+## Variance explained
+
+```{r}
+# Calculate variance of each component
+pr.var <- wisc.pr$sdev^2
+head(pr.var)
+```
+
+```{r}
+# Variance explained by each principal component: pve
+pve <- pr.var / sum(pr.var)
+
+# Plot variance explained for each principal component
+plot(c(1,pve), xlab = "Principal Component", 
+     ylab = "Proportion of Variance Explained", 
+     ylim = c(0, 1), type = "o")
+```
+
+```{r}
+# Alternative scree plot of the same data, note data driven y-axis
+barplot(pve, ylab = "Percent of Variance Explained",
+     names.arg=paste0("PC",1:length(pve)), las=2, axes = FALSE)
+axis(2, at=pve, labels=round(pve,2)*100 )
+```
+
+```{r}
+## ggplot based graph
+#install.packages("factoextra")
+library(factoextra)
+fviz_eig(wisc.pr, addlabels = TRUE)
+```
+
+>**Q9.** For the first principal component, what is the component of the loading vector (i.e. wisc.pr$rotation[,1]) for the feature concave.points_mean? This tells us how much this original feature contributes to the first PC. Are there any features with larger contributions than this one?
+
+
+```{r}
+wisc.pr$rotation["concave.points_mean", 1]
+```
+```{r}
+PC1 <- wisc.pr$rotation[, 1]
+Bigger <-PC1[abs(PC1)> abs(PC1["concave.points_mean"])]
+Bigger
+```
+There is no other points that have a larger contribution than PC1
+
+## Hierarchial clustering
+
+```{r}
+# Scale the wisc.data data using the "scale()" function
+data.scaled <- scale(wisc.data)
+
+data.dist <- dist(data.scaled)
+
+wisc.hclust <- hclust(data.dist, method ="complete")
+```
+>**Q10.** Using the plot() and abline() functions, what is the height at which the clustering model has 4 clusters?
+
+The height at which the clustering model has 4 clusters is at 19
+
+```{r}
+plot(wisc.hclust)
+abline(h=19, col="red", lty=2)
+```
+
+```{r}
+wisc.hcust.clusters <- cutree(wisc.hclust, k = 4)
+
+table(wisc.hcust.clusters, diagnosis)
+```
+>Q12. Which method gives your favorite results for the same data.dist dataset? Explain your reasoning.
+
+It is nice and simple and gives the same results
+```{r}
+hc.complete <- hclust(data.dist, method = "complete")
+
+table(cutree(hc.complete, k = 4), diagnosis)
+```
+
+
+
+## Combining Methods
+
+```{r}
+wisc.pr.hclust <- hclust(dist(wisc.pr$x[, 1:7]), method = "ward.D2")
+grps <- cutree(wisc.pr.hclust, k=2)
+table(grps)
+```
+
+```{r}
+table(diagnosis, grps)
+```
+
+```{r}
+ggplot(wisc.pr$x) +
+  aes(PC1, PC2) +
+  geom_point(col=grps)
+```
+
+
+```{r}
+wisc.pr.hclust.clusters <- cutree(wisc.pr.hclust, k=2)
+```
+>Q13. How well does the newly created hclust model with two clusters separate out the two “M” and “B” diagnoses?
+
+It seperated most of M into cluster 1 and seperated most of the B into cluster 2
+```{r}
+table(wisc.pr.hclust.clusters, diagnosis)
+```
+>Q14. How well do the hierarchical clustering models you created in the previous sections (i.e. without first doing PCA) do in terms of separating the diagnoses? Again, use the table() function to compare the output of each model (wisc.hclust.clusters and wisc.pr.hclust.clusters) with the vector containing the actual diagnoses.
+table(___, diagnosis)
+
+The cluster that uses no PR is not good because it seperates them unequally while the one with the PCA is better formatted and segregated.
+```{r}
+table(wisc.hcust.clusters, diagnosis)
+```
+
+
+Sensitivity: TP/TP+FN
+Specificity: TN/(TN+FP)
+
+
+## Prediction
+
+Here we read new DNA from UM
+
+```{r}
+#url <- "new_samples.csv"
+url <- "https://tinyurl.com/new-samples-CSV"
+new <- read.csv(url)
+npc <- predict(wisc.pr, newdata=new)
+npc
+```
+ 
+```{r}
+plot(wisc.pr$x[,1:2], col=grps)
+points(npc[,1], npc[,2], col="blue", pch=16, cex=3)
+text(npc[,1], npc[,2], c(1,2), col="white")
+```
+ >Q16. Which of these new patients should we prioritize for follow up based on your results?
+ 
+ 
+ I believe we should follow up more on patient 1 becuase patient 1 is surrounded in an area that is more clustered together compared to patient 2.
